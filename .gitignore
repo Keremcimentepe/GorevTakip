@@ -5,3 +5,12 @@
 .vscode/*
 !.vscode/extensions.json
 .idea
+.vs/
+
+# .NET derleme ve test çıktıları (API ve GorevTakip.Tests için)
+[Bb]in/
+[Oo]bj/
+TestResults/
+
+# docker compose ayarları (gerçek parolalar burada; git'e girmez)
+.env

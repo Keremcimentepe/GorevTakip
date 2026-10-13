@@ -22,7 +22,9 @@ export function AddForm({ placeholder, buttonLabel, maxLength, onSubmit }: Props
     setBusy(true)
     const ok = await onSubmit(trimmed)
     setBusy(false)
-    if (ok) setValue('')
+    // İstek sürerken kullanıcı sıradakini yazmaya başlamış olabilir: kutuyu yalnızca
+    // gönderilen metin hâlâ duruyorsa temizle, yeni yazılanı silme
+    if (ok) setValue((current) => (current === value ? '' : current))
   }
 
   return (

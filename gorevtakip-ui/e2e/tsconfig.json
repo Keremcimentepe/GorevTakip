@@ -1,0 +1,19 @@
+{
+  // Sadece editörün (ve istersen `npx tsc -p e2e`'nin) uçtan uca test dosyalarını tip denetimi
+  // yapabilmesi için. `npm run build` bu klasörü derlemez.
+  "compilerOptions": {
+    "target": "es2023",
+    "lib": ["ES2023", "DOM"],
+    "module": "esnext",
+    "moduleResolution": "bundler",
+    "types": ["node"],
+    "strict": true,
+    "noEmit": true,
+    "skipLibCheck": true,
+    "verbatimModuleSyntax": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "erasableSyntaxOnly": true
+  },
+  "include": ["./**/*.ts", "../playwright.config.ts"]
+}

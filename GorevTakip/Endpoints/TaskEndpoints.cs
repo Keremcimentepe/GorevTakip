@@ -1,3 +1,4 @@
+using System.Security.Claims;
 using GorevTakip.Dtos;
 using GorevTakip.Infrastructure;
 using GorevTakip.Models;
@@ -10,12 +11,12 @@ public static class TaskEndpoints
     public static void MapTaskEndpoints(this IEndpointRouteBuilder app)
     {
         // --- Bir projenin altındaki görevler: listele ve ekle ---
-        var projectTasks = app.MapGroup("/projects/{projectId:int}/tasks").WithTags("Tasks");
+        var projectTasks = app.MapGroup("/projects/{projectId:int}/tasks").WithTags("Tasks").RequireAuthorization();
 
         // İsteğe bağlı filtre: GET /projects/1/tasks?status=Done
-        projectTasks.MapGet("/", async (int projectId, TaskItemStatus? status, ITaskService service) =>
+        projectTasks.MapGet("/", async (int projectId, TaskItemStatus? status, ClaimsPrincipal user, ITaskService service) =>
             {
-                var tasks = await service.GetByProjectAsync(projectId, status);
+                var tasks = await service.GetByProjectAsync(user.GetUserId(), projectId, status);
 
                 return tasks is null
                     ? Results.NotFound()
@@ -25,9 +26,9 @@ public static class TaskEndpoints
             .Produces<List<TaskResponse>>()
             .Produces(StatusCodes.Status404NotFound);
 
-        projectTasks.MapPost("/", async (int projectId, CreateTaskRequest request, ITaskService service) =>
+        projectTasks.MapPost("/", async (int projectId, CreateTaskRequest request, ClaimsPrincipal user, ITaskService service) =>
             {
-                var created = await service.CreateAsync(projectId, request);
+                var created = await service.CreateAsync(user.GetUserId(), projectId, request);
 
                 return created is null
                     ? Results.NotFound()
@@ -40,11 +41,11 @@ public static class TaskEndpoints
             .ProducesValidationProblem();
 
         // --- Tek bir görev üzerinde işlemler ---
-        var tasks = app.MapGroup("/tasks").WithTags("Tasks");
+        var tasks = app.MapGroup("/tasks").WithTags("Tasks").RequireAuthorization();
 
-        tasks.MapGet("/{id:int}", async (int id, ITaskService service) =>
+        tasks.MapGet("/{id:int}", async (int id, ClaimsPrincipal user, ITaskService service) =>
             {
-                var task = await service.GetByIdAsync(id);
+                var task = await service.GetByIdAsync(user.GetUserId(), id);
 
                 return task is null
                     ? Results.NotFound()
@@ -54,9 +55,9 @@ public static class TaskEndpoints
             .Produces<TaskResponse>()
             .Produces(StatusCodes.Status404NotFound);
 
-        tasks.MapPut("/{id:int}", async (int id, UpdateTaskRequest request, ITaskService service) =>
+        tasks.MapPut("/{id:int}", async (int id, UpdateTaskRequest request, ClaimsPrincipal user, ITaskService service) =>
             {
-                var updated = await service.UpdateAsync(id, request);
+                var updated = await service.UpdateAsync(user.GetUserId(), id, request);
 
                 return updated ? Results.NoContent() : Results.NotFound();
             })
@@ -67,9 +68,9 @@ public static class TaskEndpoints
             .ProducesValidationProblem();
 
         // Kartı başka kolona taşımak: sadece durumu değiştirir
-        tasks.MapPatch("/{id:int}/status", async (int id, UpdateTaskStatusRequest request, ITaskService service) =>
+        tasks.MapPatch("/{id:int}/status", async (int id, UpdateTaskStatusRequest request, ClaimsPrincipal user, ITaskService service) =>
             {
-                var task = await service.UpdateStatusAsync(id, request);
+                var task = await service.UpdateStatusAsync(user.GetUserId(), id, request);
 
                 return task is null
                     ? Results.NotFound()
@@ -81,9 +82,9 @@ public static class TaskEndpoints
             .Produces(StatusCodes.Status404NotFound)
             .ProducesValidationProblem();
 
-        tasks.MapDelete("/{id:int}", async (int id, ITaskService service) =>
+        tasks.MapDelete("/{id:int}", async (int id, ClaimsPrincipal user, ITaskService service) =>
             {
-                var deleted = await service.DeleteAsync(id);
+                var deleted = await service.DeleteAsync(user.GetUserId(), id);
 
                 return deleted ? Results.NoContent() : Results.NotFound();
             })

@@ -1,0 +1,44 @@
+# Render "Blueprint": Render'a hangi servisleri kuracağını söyler (Dashboard → New → Blueprint).
+# Veritabanı Render'da DEĞİL Neon'da (ücretsiz, süresiz): DEPLOY.md'deki adımlara bak.
+#
+# sync: false olan değerleri Render, Blueprint'i ilk kurarken senden ister (gizli ya da sana özel olanlar).
+
+services:
+  # ---------- API (Docker) ----------
+  - type: web
+    name: gorevtakip-api
+    runtime: docker
+    plan: free
+    region: frankfurt
+    dockerfilePath: ./GorevTakip/Dockerfile
+    dockerContext: ./GorevTakip
+    healthCheckPath: /health
+    autoDeployTrigger: checksPass   # GitHub Actions (CI) yeşil olmadan canlıya alma
+    envVars:
+      - key: ASPNETCORE_ENVIRONMENT
+        value: Production
+      - key: PORT                    # Render varsayılanı 10000; imaj 8080'i dinlediği için aynı değeri veriyoruz
+        value: "8080"
+      - key: ASPNETCORE_FORWARDEDHEADERS_ENABLED   # Render'ın ters vekili arkasında gerçek istemci IP'si (hız sınırı için)
+        value: "true"
+      - key: Database__MigrateOnStartup
+        value: "true"
+      - key: ConnectionStrings__Default            # Neon bağlantı adresi (postgresql://...)
+        sync: false
+      - key: Cors__AllowedOrigins__0               # Arayüzün adresi, örn. https://gorevtakip-ui.onrender.com
+        sync: false
+      - key: Jwt__Key                              # Render rastgele, güçlü bir anahtar üretir
+        generateValue: true
+
+  # ---------- Arayüz (statik site) ----------
+  - type: web
+    name: gorevtakip-ui
+    runtime: static
+    buildCommand: cd gorevtakip-ui && npm ci && npm run build
+    staticPublishPath: ./gorevtakip-ui/dist
+    autoDeployTrigger: checksPass
+    envVars:
+      - key: NODE_VERSION
+        value: "22"
+      - key: VITE_API_URL                          # API'nin adresi, örn. https://gorevtakip-api.onrender.com
+        sync: false

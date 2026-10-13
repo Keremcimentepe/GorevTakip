@@ -36,3 +36,10 @@ export const COLUMNS: { status: TaskStatus; title: string }[] = [
   { status: 'InProgress', title: 'Devam ediyor' },
   { status: 'Done', title: 'Tamamlandı' },
 ]
+
+// POST /auth/login ve /auth/register cevabı (backend: AuthResponse)
+export interface AuthResponse {
+  token: string
+  expiresAt: string // ISO tarih, UTC
+  email: string
+}

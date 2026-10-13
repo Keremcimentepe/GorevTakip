@@ -1,0 +1,12 @@
+# İmaj bağlamına girmesin: derleme çıktıları, yerel veritabanı, editör dosyaları
+**/bin/
+**/obj/
+**/*.db
+**/*.db-shm
+**/*.db-wal
+.vs/
+.vscode/
+.idea/
+Dockerfile
+.dockerignore
+README.md

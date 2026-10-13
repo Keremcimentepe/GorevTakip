@@ -1,5 +1,7 @@
 // Tüm HTTP istekleri buradan geçer. Bileşenler fetch'i doğrudan bilmez;
-// adres, JSON dönüşümü ve hata mesajı çıkarma işi tek yerde durur.
+// adres, JSON dönüşümü, giriş token'ı ve hata mesajı çıkarma işi tek yerde durur.
+
+import { clearSession, getToken } from './session'
 
 const BASE_URL: string = import.meta.env.VITE_API_URL ?? 'http://localhost:5291'
 
@@ -28,16 +30,38 @@ async function readErrorMessage(response: Response): Promise<string> {
   } catch {
     // Gövde JSON değilse aşağıdaki varsayılan mesajlara düş
   }
+  if (response.status === 401) return 'Oturumun süresi dolmuş ya da geçersiz. Lütfen yeniden giriş yap.'
   if (response.status === 404) return 'Kayıt bulunamadı.'
+  if (response.status === 429) return 'Çok fazla deneme yaptın. Biraz bekleyip tekrar dene.'
   return `Sunucu hatası (${response.status}).`
 }
 
-async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
+// Oturum sunucu tarafından reddedilince (token süresi dolmuş ya da geçersiz) haber verilecek yer.
+// Arayüz buraya "giriş ekranına dön ve nedenini söyle" işini bağlar.
+let unauthorizedHandler: (() => void) | null = null
+
+export function setUnauthorizedHandler(handler: (() => void) | null): () => void {
+  unauthorizedHandler = handler
+  return () => {
+    if (unauthorizedHandler === handler) unauthorizedHandler = null
+  }
+}
+
+interface RequestOptions extends RequestInit {
+  /** false: Authorization başlığı eklenmez (giriş/kayıt isteklerinde). Varsayılan true. */
+  auth?: boolean
+}
+
+async function request<T>(path: string, { auth = true, ...options }: RequestOptions = {}): Promise<T> {
+  const token = auth ? getToken() : null
+  const headers: Record<string, string> = { 'Content-Type': 'application/json' }
+  if (token) headers.Authorization = `Bearer ${token}`
+
   let response: Response
   try {
     response = await fetch(`${BASE_URL}${path}`, {
       ...options,
-      headers: { 'Content-Type': 'application/json', ...options.headers },
+      headers: { ...headers, ...(options.headers as Record<string, string> | undefined) },
     })
   } catch {
     // fetch, sunucuya hiç ulaşamazsa (kapalı, yanlış port, CORS) hata fırlatır
@@ -45,6 +69,13 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   }
 
   if (!response.ok) {
+    // Token gönderdik ve reddedildi: oturum bitmiş demektir. Yanlış şifreli giriş denemesi (auth: false)
+    // buraya girmez. İstek sürerken kullanıcı yeniden giriş yaptıysa (token değiştiyse) o yeni oturumu
+    // eski isteğin 401'i yüzünden silmeyiz.
+    if (response.status === 401 && token && getToken() === token) {
+      clearSession()
+      unauthorizedHandler?.()
+    }
     throw new ApiError(await readErrorMessage(response), response.status)
   }
 
@@ -60,8 +91,8 @@ export function get<T>(path: string) {
   return request<T>(path)
 }
 
-export function post<T>(path: string, body: unknown) {
-  return request<T>(path, { method: 'POST', body: JSON.stringify(body) })
+export function post<T>(path: string, body: unknown, options: { auth?: boolean } = {}) {
+  return request<T>(path, { ...options, method: 'POST', body: JSON.stringify(body) })
 }
 
 export function patch<T>(path: string, body: unknown) {

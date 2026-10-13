@@ -14,9 +14,9 @@ public class TaskService : ITaskService
         _db = db;
     }
 
-    public async Task<List<TaskResponse>?> GetByProjectAsync(int projectId, TaskItemStatus? status)
+    public async Task<List<TaskResponse>?> GetByProjectAsync(int userId, int projectId, TaskItemStatus? status)
     {
-        if (!await _db.Projects.AnyAsync(p => p.Id == projectId))
+        if (!await OwnsProjectAsync(userId, projectId))
             return null;
 
         var query = _db.Tasks.AsNoTracking().Where(t => t.ProjectId == projectId);
@@ -29,9 +29,9 @@ public class TaskService : ITaskService
         return tasks.Select(t => t.ToResponse()).ToList();
     }
 
-    public async Task<TaskResponse?> CreateAsync(int projectId, CreateTaskRequest request)
+    public async Task<TaskResponse?> CreateAsync(int userId, int projectId, CreateTaskRequest request)
     {
-        if (!await _db.Projects.AnyAsync(p => p.Id == projectId))
+        if (!await OwnsProjectAsync(userId, projectId))
             return null;
 
         var task = new TaskItem
@@ -47,16 +47,18 @@ public class TaskService : ITaskService
         return task.ToResponse();
     }
 
-    public async Task<TaskResponse?> GetByIdAsync(int id)
+    public async Task<TaskResponse?> GetByIdAsync(int userId, int id)
     {
-        var task = await _db.Tasks.AsNoTracking().FirstOrDefaultAsync(t => t.Id == id);
+        var task = await _db.Tasks
+            .AsNoTracking()
+            .FirstOrDefaultAsync(t => t.Id == id && t.Project.OwnerId == userId);
 
         return task?.ToResponse();
     }
 
-    public async Task<bool> UpdateAsync(int id, UpdateTaskRequest request)
+    public async Task<bool> UpdateAsync(int userId, int id, UpdateTaskRequest request)
     {
-        var task = await _db.Tasks.FindAsync(id);
+        var task = await FindOwnedAsync(userId, id);
         if (task is null)
             return false;
 
@@ -68,9 +70,9 @@ public class TaskService : ITaskService
         return true;
     }
 
-    public async Task<TaskResponse?> UpdateStatusAsync(int id, UpdateTaskStatusRequest request)
+    public async Task<TaskResponse?> UpdateStatusAsync(int userId, int id, UpdateTaskStatusRequest request)
     {
-        var task = await _db.Tasks.FindAsync(id);
+        var task = await FindOwnedAsync(userId, id);
         if (task is null)
             return null;
 
@@ -80,9 +82,9 @@ public class TaskService : ITaskService
         return task.ToResponse();
     }
 
-    public async Task<bool> DeleteAsync(int id)
+    public async Task<bool> DeleteAsync(int userId, int id)
     {
-        var task = await _db.Tasks.FindAsync(id);
+        var task = await FindOwnedAsync(userId, id);
         if (task is null)
             return false;
 
@@ -91,4 +93,11 @@ public class TaskService : ITaskService
 
         return true;
     }
+
+    private Task<bool> OwnsProjectAsync(int userId, int projectId) =>
+        _db.Projects.AnyAsync(p => p.Id == projectId && p.OwnerId == userId);
+
+    // Görevin sahibi = bağlı olduğu projenin sahibi
+    private Task<TaskItem?> FindOwnedAsync(int userId, int id) =>
+        _db.Tasks.FirstOrDefaultAsync(t => t.Id == id && t.Project.OwnerId == userId);
 }

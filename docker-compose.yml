@@ -1,0 +1,53 @@
+# Tüm uygulamayı (veritabanı + API + arayüz) tek komutla ayağa kaldırır:
+#   cp .env.example .env      # bir kez; içindeki değerleri düzenle
+#   docker compose up --build
+#
+# Arayüz  → http://localhost:8080
+# API     → http://localhost:5291   (Swagger yalnızca Development ortamında açıktır)
+# Sağlık  → http://localhost:5291/health
+
+services:
+  db:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-gorevtakip}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD .env dosyasında tanımlı olmalı}
+      POSTGRES_DB: ${POSTGRES_DB:-gorevtakip}
+    ports:
+      - "127.0.0.1:5432:5432"   # yalnızca bu bilgisayardan erişilir; `dotnet run` ile geliştirirken bu veritabanına bağlanılır
+    volumes:
+      - pgdata:/var/lib/postgresql/data   # konteyner silinse de veri kalır (`docker compose down -v` siler)
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+
+  api:
+    build: ./GorevTakip
+    depends_on:
+      db:
+        condition: service_healthy   # veritabanı bağlantı kabul edene kadar bekle
+    environment:
+      ASPNETCORE_ENVIRONMENT: Production
+      # Çift alt çizgi (__), ayar hiyerarşisindeki ":" yerine geçer: ConnectionStrings:Default
+      ConnectionStrings__Default: Host=db;Port=5432;Database=${POSTGRES_DB:-gorevtakip};Username=${POSTGRES_USER:-gorevtakip};Password=${POSTGRES_PASSWORD}
+      Jwt__Key: ${JWT_KEY:?JWT_KEY .env dosyasında tanımlı olmalı (en az 32 karakter)}
+      Cors__AllowedOrigins__0: http://localhost:8080
+      Database__MigrateOnStartup: "true"   # açılışta migration'ları uygula
+    ports:
+      - "5291:8080"
+
+  web:
+    build:
+      context: ./gorevtakip-ui
+      args:
+        # Tarayıcı API'ye konteyner içinden değil kendi makinenden bağlanır: localhost adresi
+        VITE_API_URL: http://localhost:5291
+    depends_on:
+      - api
+    ports:
+      - "8080:8080"
+
+volumes:
+  pgdata:

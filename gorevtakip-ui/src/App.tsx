@@ -1,10 +1,28 @@
 import { useState } from 'react'
 import './App.css'
+import { AuthForm } from './components/AuthForm'
 import { Board } from './components/Board'
 import { ProjectList } from './components/ProjectList'
+import { useAuth } from './hooks/useAuth'
 import { useProjects } from './hooks/useProjects'
 
+// Kapı: oturum yoksa giriş/kayıt formu, varsa çalışma alanı.
 export default function App() {
+  const { session, notice, login, register, logout } = useAuth()
+
+  if (!session) return <AuthForm notice={notice} onLogin={login} onRegister={register} />
+
+  // key: kullanıcı değişirse (ör. başka sekmede başka hesapla girildi) çalışma alanı sıfırdan kurulur,
+  // önceki kullanıcının projeleri bir an bile görünmez.
+  return <Workspace key={session.email} email={session.email} onLogout={logout} />
+}
+
+interface WorkspaceProps {
+  email: string
+  onLogout: () => void
+}
+
+function Workspace({ email, onLogout }: WorkspaceProps) {
   const { projects, loading, error, reload, addProject, removeProject } = useProjects()
   const [selectedId, setSelectedId] = useState<number | null>(null)
 
@@ -32,6 +50,15 @@ export default function App() {
           onAdd={handleAddProject}
           onDelete={handleDeleteProject}
         />
+
+        <div className="account">
+          <p className="account-email" title={email}>
+            {email}
+          </p>
+          <button type="button" onClick={onLogout}>
+            Çıkış yap
+          </button>
+        </div>
       </aside>
 
       <main className="main">

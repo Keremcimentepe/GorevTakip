@@ -1,0 +1,74 @@
+# Tek sunucuda (ör. Oracle Cloud VM) canlı kurulum: Caddy (otomatik HTTPS) + arayüz + API + PostgreSQL.
+# Yerel geliştirme için docker-compose.yml kullanılır; bu dosya sunucu içindir.
+#
+#   cp deploy/env.prod.example .env      # değerleri doldur (SITE_ADDRESS, parolalar)
+#   docker compose -f docker-compose.prod.yml up -d --build
+#
+# Dışarıya yalnızca Caddy açılır (80 ve 443). Veritabanı ve API sunucunun dışından erişilemez.
+# Tek adres, iki yol:   https://SITE_ADDRESS/      → arayüz
+#                       https://SITE_ADDRESS/api/  → API   (Caddy "/api" önekini keser)
+# Arayüz ve API aynı adreste olduğu için tarayıcıda CORS sorunu yoktur.
+
+name: gorevtakip
+
+services:
+  db:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-gorevtakip}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD .env dosyasında tanımlı olmalı}
+      POSTGRES_DB: ${POSTGRES_DB:-gorevtakip}
+    volumes:
+      - pgdata:/var/lib/postgresql/data   # konteyner silinse de veri kalır (`down -v` siler: kullanma!)
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  api:
+    build: ./GorevTakip
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      ASPNETCORE_ENVIRONMENT: Production
+      # Caddy'nin arkasındayız: gerçek istemci IP'sini X-Forwarded-For'dan oku (giriş hız sınırı IP'ye göre çalışır).
+      # API'nin portu dışarıya açık olmadığı için başlığı Caddy'den başkası gönderemez.
+      ASPNETCORE_FORWARDEDHEADERS_ENABLED: "true"
+      ConnectionStrings__Default: Host=db;Port=5432;Database=${POSTGRES_DB:-gorevtakip};Username=${POSTGRES_USER:-gorevtakip};Password=${POSTGRES_PASSWORD}
+      Jwt__Key: ${JWT_KEY:?JWT_KEY .env dosyasında tanımlı olmalı (en az 32 karakter)}
+      Cors__AllowedOrigins__0: https://${SITE_ADDRESS:?SITE_ADDRESS .env dosyasında tanımlı olmalı}
+      Database__MigrateOnStartup: "true"   # açılışta migration'ları uygula
+
+  web:
+    build:
+      context: ./gorevtakip-ui
+      args:
+        # Göreli adres: tarayıcı API'ye sayfanın geldiği adresten, "/api" yolundan bağlanır.
+        VITE_API_URL: /api
+    restart: unless-stopped
+
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    depends_on:
+      - api
+      - web
+    ports:
+      - "80:80"        # Let's Encrypt doğrulaması + https'e yönlendirme
+      - "443:443"
+      - "443:443/udp"  # HTTP/3
+    environment:
+      SITE_ADDRESS: ${SITE_ADDRESS:?SITE_ADDRESS .env dosyasında tanımlı olmalı}
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data        # SERTİFİKALAR burada; silinirse Let's Encrypt'ten yeniden alınır (sınırı var)
+      - caddy_config:/config
+
+volumes:
+  pgdata:
+  caddy_data:
+  caddy_config:

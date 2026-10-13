@@ -1,0 +1,17 @@
+# Caddy: tek giriş kapısı. Sertifikayı kendisi alır ve yeniler (Let's Encrypt), http'yi https'e yönlendirir.
+# SITE_ADDRESS bir alan adı olmalı (ör. gorevtakip.example.com ya da 129-151-10-20.sslip.io);
+# .env dosyasından docker-compose.prod.yml aracılığıyla gelir.
+
+{$SITE_ADDRESS} {
+	encode zstd gzip
+
+	# /api/projects → API'ye /projects olarak gider (handle_path öneki keser)
+	handle_path /api/* {
+		reverse_proxy api:8080
+	}
+
+	# geri kalan her şey → arayüz (nginx)
+	handle {
+		reverse_proxy web:8080
+	}
+}

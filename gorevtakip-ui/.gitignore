@@ -25,3 +25,8 @@ dist-ssr
 
 # Ortam değişkenleri (.env.example örnek olarak git'e girer)
 .env
+
+# Test çıktıları
+coverage
+test-results
+playwright-report
