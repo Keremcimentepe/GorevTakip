@@ -67,6 +67,7 @@ services:
       - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
       - caddy_data:/data        # SERTİFİKALAR burada; silinirse Let's Encrypt'ten yeniden alınır (sınırı var)
       - caddy_config:/config
+      - ../caddy-sites:/srv/sites:ro   # sunucudaki ~/caddy-sites: diğer sitelerin dosyaları ve Caddy blokları
 
 volumes:
   pgdata:

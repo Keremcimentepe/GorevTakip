@@ -15,3 +15,7 @@
 		reverse_proxy web:8080
 	}
 }
+
+# Aynı sunucudaki diğer siteler (ör. portföy) bu depoda değil, sunucuda ~/caddy-sites/*.caddy dosyalarında durur.
+# Klasör boşsa Caddy yalnızca uyarı yazar; TaskFlow etkilenmez.
+import /srv/sites/*.caddy
